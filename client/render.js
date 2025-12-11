@@ -2,7 +2,7 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 // how many hexes visible in every direction (hex radius)
-const VIEW_RADIUS = 2;
+const VIEW_RADIUS = 3;
 
 // center of the canvas
 const MAP_ORIGIN = {
@@ -31,6 +31,9 @@ function render(gameState, playerId) {
 
   const player = gameState.players[playerId];
   const bounds = gameState.bounds; // optional, but used if present
+
+  // Update debug info
+  updateDebugInfo(gameState, playerId);
 
   // --------- draw background FOV grid ----------
   for (let dq = -VIEW_RADIUS; dq <= VIEW_RADIUS; dq++) {
@@ -102,4 +105,100 @@ function render(gameState, playerId) {
   }
 }
 
+function updateDebugInfo(gameState, playerId) {
+  const debugBox = document.getElementById("debugBox");
+  const debugContent = document.getElementById("debugContent");
+  
+  if (!gameState || !gameState.players || !gameState.players[playerId]) {
+    debugBox.style.display = "none";
+    return;
+  }
+
+  debugBox.style.display = "block";
+  const player = gameState.players[playerId];
+  const bounds = gameState.bounds || {};
+
+  // Calculate visible players and distances to all other players
+  let visiblePlayers = 0;
+  let nearestPlayerDist = null;
+  let nearestPlayerId = null;
+  const otherPlayers = [];
+
+  for (const id in gameState.players) {
+    if (id === playerId) continue;
+    const p = gameState.players[id];
+    const dq = p.q - player.q;
+    const dr = p.r - player.r;
+    const dist = hexDistance(dq, dr);
+    
+    otherPlayers.push({
+      id: id.substring(0, 8) + '...', // Shortened ID for display
+      fullId: id,
+      q: p.q,
+      r: p.r,
+      dist: dist,
+      mode: p.mode,
+      hp: p.hp
+    });
+    
+    if (dist <= VIEW_RADIUS - 1) {
+      visiblePlayers++;
+    }
+    
+    if (nearestPlayerDist === null || dist < nearestPlayerDist) {
+      nearestPlayerDist = dist;
+      nearestPlayerId = id;
+    }
+  }
+  
+  // Sort by distance
+  otherPlayers.sort((a, b) => a.dist - b.dist);
+
+  // Get chest count (Maps serialize to {} in JSON, so check for size or count keys)
+  let chestCount = 0;
+  if (gameState.chests) {
+    if (typeof gameState.chests.size === 'number') {
+      chestCount = gameState.chests.size;
+    } else if (Array.isArray(gameState.chests)) {
+      chestCount = gameState.chests.length;
+    } else if (typeof gameState.chests === 'object') {
+      chestCount = Object.keys(gameState.chests).length;
+    }
+  }
+
+  // Build debug HTML
+  let html = '';
+  
+  html += `<div class="debug-line"><span class="debug-label">Tick:</span><span class="debug-value">${gameState.tick || 0}</span></div>`;
+  html += `<div class="debug-line"><span class="debug-label">Position:</span><span class="debug-value">(${player.q}, ${player.r})</span></div>`;
+  html += `<div class="debug-line"><span class="debug-label">HP:</span><span class="debug-value">${player.hp || 0}</span></div>`;
+  html += `<div class="debug-line"><span class="debug-label">Level:</span><span class="debug-value">${player.level || 1}</span></div>`;
+  html += `<div class="debug-line"><span class="debug-label">Mode:</span><span class="debug-value">${player.mode || 'N/A'}</span></div>`;
+  html += `<div class="debug-line"><span class="debug-label">Visible Players:</span><span class="debug-value">${visiblePlayers}</span></div>`;
+  
+  if (nearestPlayerDist !== null) {
+    const nearest = otherPlayers[0];
+    html += `<div class="debug-line"><span class="debug-label">Nearest Player:</span><span class="debug-value">${nearestPlayerDist} hexes (${nearest.id})</span></div>`;
+    html += `<div class="debug-line"><span class="debug-label">  └─ Position:</span><span class="debug-value">(${nearest.q}, ${nearest.r})</span></div>`;
+  } else {
+    html += `<div class="debug-line"><span class="debug-label">Nearest Player:</span><span class="debug-value">None</span></div>`;
+  }
+  
+  // Show all other players
+  if (otherPlayers.length > 0) {
+    html += `<div class="debug-line" style="margin-top: 8px; border-top: 1px solid #333; padding-top: 4px;"><span class="debug-label" style="color: #4CAF50;">All Players:</span></div>`;
+    otherPlayers.forEach(p => {
+      html += `<div class="debug-line" style="margin-left: 10px; font-size: 10px;">`;
+      html += `<span class="debug-label">${p.id}:</span>`;
+      html += `<span class="debug-value">${p.dist} hexes @ (${p.q}, ${p.r}) [${p.mode}] HP:${p.hp}</span>`;
+      html += `</div>`;
+    });
+  }
+  
+  html += `<div class="debug-line"><span class="debug-label">Map Bounds:</span><span class="debug-value">Q[${bounds.minQ || '?'}, ${bounds.maxQ || '?'}] R[${bounds.minR || '?'}, ${bounds.maxR || '?'}]</span></div>`;
+  html += `<div class="debug-line"><span class="debug-label">Chests:</span><span class="debug-value">${chestCount}</span></div>`;
+  html += `<div class="debug-line"><span class="debug-label">Total Players:</span><span class="debug-value">${Object.keys(gameState.players || {}).length}</span></div>`;
+
+  debugContent.innerHTML = html;
+}
 

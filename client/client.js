@@ -7,19 +7,30 @@ const ws = new WebSocket("ws://localhost:8080");
 
 ws.onopen = () => {
   status.textContent = "Connected to server";
+  let savedId = localStorage.getItem("playerId");
+  ws.send(JSON.stringify({
+    type: "HELLO",
+    playerId: savedId
+  }));
+  myId = savedId;
 };
 
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
 
-  if (msg.type === "WELCOME") {
+  if(!myId) {
     myId = msg.id;
+  }
+
+  if (msg.type === "WELCOME") {
     console.log("Player ID:", myId);
+    localStorage.setItem("playerId", myId);
     status.textContent = "Joined game";
   }
 
   if (msg.type === "UPDATE") {
     gameState = msg.state;
+    console.log(gameState);
     render(gameState, myId);
   }
 };

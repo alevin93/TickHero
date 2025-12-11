@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 
-const TICK_RATE = 2000;
+const TICK_RATE = 4000;
 
 const wss = new WebSocket.Server({ port: 8080 });
 
@@ -14,25 +14,35 @@ let gameState = {
 
 wss.on('connection', (ws) => {
 
-    const id = Math.random().toString(36).slice(2);
-    players[id] = {
-        id,
-        socket: ws,
-        mode: "AGGRESSIVE",
-        level: 1,
-        hp: 10,
-        q: Math.floor(Math.random() * 10),
-        r: Math.floor(Math.random() * 10),
-    }
-
-    console.log("Player connected: ", id);
-    gameState.players[id] = players[id];
-
-    ws.send(JSON.stringify({ type: "WELCOME", id}));
-
     ws.on('message', msg => {
         const data = JSON.parse(msg);
-
+        let id = data.playerId;
+        console.log(data.type === "HELLO");
+        console.log(data.playerId);
+        console.log(!data.playerId);
+        if(data.type === "HELLO") {
+            if(!data.playerId) {
+                id = Math.random().toString(36).slice(2);
+                players[id] = {
+                    id: id,
+                    socket: ws,
+                    mode: "AGGRESSIVE",
+                    level: 1,
+                    hp: 10,
+                    q: Math.floor(Math.random() * 101) - 50,
+                    r: Math.floor(Math.random() * 101) - 50,
+                }
+                ws.id = id;
+            }
+            else {
+                players[data.playerId].socket = ws;
+                ws.id = data.playerId;
+            }
+            console.log("Player connected: ", id);
+            gameState.players[id] = players[id];
+            ws.send(JSON.stringify({ type: "WELCOME", id: id}));
+            ws.send(JSON.stringify({ type: "UPDATE",  state: gameState }));
+        }
         if(data.type === "SET_MODE") {
             players[id].mode = data.mode;
             console.log(`Player ${id} switched to ${data.mode}`);
@@ -40,8 +50,7 @@ wss.on('connection', (ws) => {
     });
 
     ws.on('close', () => {
-        delete players[id];
-        console.log(`Player ${id} disconnected`);
+        console.log(`Player ${ws.id} disconnected`);
     });
 });
 
@@ -51,9 +60,9 @@ setInterval(() => {
     resolveAttacks(players);
     resolveMovement(players);
 
+    gameState.tick++;
     sendUpdates(players);
 
-    gameState.tick++;
     console.log("----------TICK #", gameState.tick, "-------------");
 
 }, TICK_RATE);
@@ -65,7 +74,6 @@ function sendUpdates(players) {
         console.log("Sending update to player: ", id);
         console.log("Game state: ", gameState);
         ws.send(JSON.stringify({ type: "UPDATE",  state: gameState }));
-        
     }
 }
 
