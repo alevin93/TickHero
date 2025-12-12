@@ -24,7 +24,7 @@ function inBounds(q, r, bounds) {
   );
 }
 
-function render(gameState, playerId) {
+function render(gameState, playerId, offsetX = 0, offsetY = 0, enemyOffsets = {}) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   if (!gameState || !gameState.players || !gameState.players[playerId]) return;
@@ -62,8 +62,8 @@ function render(gameState, playerId) {
 
       drawHex(
         ctx,
-        MAP_ORIGIN.x + pt.x,
-        MAP_ORIGIN.y + pt.y,
+        MAP_ORIGIN.x + pt.x - offsetX,
+        MAP_ORIGIN.y + pt.y - offsetY,
         HEX_SIZE,
         fillColor,
         strokeColor
@@ -74,6 +74,7 @@ function render(gameState, playerId) {
   // --------- draw all visible players ----------
   for (const id in gameState.players) {
     const p = gameState.players[id];
+    const isMe = id === playerId;
 
     const dq = p.q - player.q;
     const dr = p.r - player.r;
@@ -83,12 +84,23 @@ function render(gameState, playerId) {
     if (dist > VIEW_RADIUS - 1) continue;
 
     const pos = hexToPixel(dq, dr);
-    const isMe = id === playerId;
+
+    // Current player stays at center (no offset), others get grid offset + their own animation offset
+    let drawX, drawY;
+    if (isMe) {
+      drawX = MAP_ORIGIN.x;
+      drawY = MAP_ORIGIN.y;
+    } else {
+      // Apply grid offset (from player movement) and enemy's individual animation offset
+      const enemyOffset = enemyOffsets[id] || { x: 0, y: 0 };
+      drawX = MAP_ORIGIN.x + pos.x - offsetX + enemyOffset.x;
+      drawY = MAP_ORIGIN.y + pos.y - offsetY + enemyOffset.y;
+    }
 
     drawHex(
       ctx,
-      MAP_ORIGIN.x + pos.x,
-      MAP_ORIGIN.y + pos.y,
+      drawX,
+      drawY,
       HEX_SIZE * 0.6,
       isMe ? "#4CAF50" : "#F44336",
       "#EEE"
@@ -99,8 +111,8 @@ function render(gameState, playerId) {
     ctx.font = "10px sans-serif";
     ctx.fillText(
       p.mode[0],
-      MAP_ORIGIN.x + pos.x - 4,
-      MAP_ORIGIN.y + pos.y + 4
+      drawX - 4,
+      drawY + 4
     );
   }
 }
